@@ -47,6 +47,10 @@
     </div>
     <button v-on:click="newQuestion" type="button" class="btn btn-primary actionBtn">Create Question</button>
     <button v-on:click="submit" type="button" class="btn btn-success actionBtn">Download Quiz</button>
+
+    <div v-if="error !== null" class="alert alert-danger">
+        {{error}}
+    </div>
   </div>
 </template>
 
@@ -75,7 +79,8 @@ export default {
         possibleAnswers: [{ id: 0, text: "" }],
         correctAnswer: null
       }
-    ]
+    ],
+    error: null
   }),
   methods: {
     newQuestion: function() {
