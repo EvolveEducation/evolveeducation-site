@@ -1,6 +1,6 @@
 <template>
   <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <a class="navbar-brand" href="/">Bacterial Growth</a>
+    <router-link class="navbar-brand" to="/">Bacterial Growth</router-link>
     <button
       class="navbar-toggler"
       type="button"
@@ -16,13 +16,13 @@
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
       <ul class="navbar-nav mr-auto">
         <li class="nav-item active">
-          <a class="nav-link" href="/about">
+          <router-link class="nav-link" to="/about">
             About
             <span class="sr-only">(current)</span>
-          </a>
+          </router-link>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="/quiz">Create Quiz</a>
+          <router-link class="nav-link" to="/quiz">Create Quiz</router-link>
         </li>
       </ul>
     </div>
