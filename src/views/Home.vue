@@ -1,18 +1,10 @@
 <template>
-  <div class="home">
-    <img alt="Vue logo" src="../assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
-  </div>
+  <iframe src="/simulation.html" title="Bacterial Growth Simulation" width="100%" height="100%"/>
 </template>
 
-<script>
-// @ is an alias to /src
-import HelloWorld from '@/components/HelloWorld.vue'
-
-export default {
-  name: 'Home',
-  components: {
-    HelloWorld
-  }
+<style scoped>
+iframe {
+  width: 1200px;
+  height: 700px;
 }
-</script>
+</style>
