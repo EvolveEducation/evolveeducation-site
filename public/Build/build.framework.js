@@ -1297,7 +1297,7 @@ function _emscripten_asm_const_ii(code, a0) {
  return ASM_CONSTS[code](a0);
 }
 STATIC_BASE = GLOBAL_BASE;
-STATICTOP = STATIC_BASE + 3119440;
+STATICTOP = STATIC_BASE + 2732816;
 __ATINIT__.push({
  func: (function() {
   __GLOBAL__sub_I_AccessibilityScriptingClasses_cpp();
@@ -3227,7 +3227,7 @@ __ATINIT__.push({
   ___emscripten_environ_constructor();
  })
 });
-var STATIC_BUMP = 3119440;
+var STATIC_BUMP = 2732816;
 Module["STATIC_BASE"] = STATIC_BASE;
 Module["STATIC_BUMP"] = STATIC_BUMP;
 var tempDoublePtr = STATICTOP;
@@ -8106,33 +8106,6 @@ function ___syscall15(which, varargs) {
   return -e.errno;
  }
 }
-function ___syscall168(which, varargs) {
- SYSCALLS.varargs = varargs;
- try {
-  var fds = SYSCALLS.get(), nfds = SYSCALLS.get(), timeout = SYSCALLS.get();
-  var nonzero = 0;
-  for (var i = 0; i < nfds; i++) {
-   var pollfd = fds + 8 * i;
-   var fd = HEAP32[pollfd >> 2];
-   var events = HEAP16[pollfd + 4 >> 1];
-   var mask = 32;
-   var stream = FS.getStream(fd);
-   if (stream) {
-    mask = SYSCALLS.DEFAULT_POLLMASK;
-    if (stream.stream_ops.poll) {
-     mask = stream.stream_ops.poll(stream);
-    }
-   }
-   mask &= events | 8 | 16;
-   if (mask) nonzero++;
-   HEAP16[pollfd + 6 >> 1] = mask;
-  }
-  return nonzero;
- } catch (e) {
-  if (typeof FS === "undefined" || !(e instanceof FS.ErrnoError)) abort(e);
-  return -e.errno;
- }
-}
 function ___syscall183(which, varargs) {
  SYSCALLS.varargs = varargs;
  try {
@@ -8404,195 +8377,6 @@ function ___syscall40(which, varargs) {
   return -e.errno;
  }
 }
-var PIPEFS = {
- BUCKET_BUFFER_SIZE: 8192,
- mount: (function(mount) {
-  return FS.createNode(null, "/", 16384 | 511, 0);
- }),
- createPipe: (function() {
-  var pipe = {
-   buckets: []
-  };
-  pipe.buckets.push({
-   buffer: new Uint8Array(PIPEFS.BUCKET_BUFFER_SIZE),
-   offset: 0,
-   roffset: 0
-  });
-  var rName = PIPEFS.nextname();
-  var wName = PIPEFS.nextname();
-  var rNode = FS.createNode(PIPEFS.root, rName, 4096, 0);
-  var wNode = FS.createNode(PIPEFS.root, wName, 4096, 0);
-  rNode.pipe = pipe;
-  wNode.pipe = pipe;
-  var readableStream = FS.createStream({
-   path: rName,
-   node: rNode,
-   flags: FS.modeStringToFlags("r"),
-   seekable: false,
-   stream_ops: PIPEFS.stream_ops
-  });
-  rNode.stream = readableStream;
-  var writableStream = FS.createStream({
-   path: wName,
-   node: wNode,
-   flags: FS.modeStringToFlags("w"),
-   seekable: false,
-   stream_ops: PIPEFS.stream_ops
-  });
-  wNode.stream = writableStream;
-  return {
-   readable_fd: readableStream.fd,
-   writable_fd: writableStream.fd
-  };
- }),
- stream_ops: {
-  poll: (function(stream) {
-   var pipe = stream.node.pipe;
-   if ((stream.flags & 2097155) === 1) {
-    return 256 | 4;
-   } else {
-    if (pipe.buckets.length > 0) {
-     for (var i = 0; i < pipe.buckets.length; i++) {
-      var bucket = pipe.buckets[i];
-      if (bucket.offset - bucket.roffset > 0) {
-       return 64 | 1;
-      }
-     }
-    }
-   }
-   return 0;
-  }),
-  ioctl: (function(stream, request, varargs) {
-   return ERRNO_CODES.EINVAL;
-  }),
-  read: (function(stream, buffer, offset, length, position) {
-   var pipe = stream.node.pipe;
-   var currentLength = 0;
-   for (var i = 0; i < pipe.buckets.length; i++) {
-    var bucket = pipe.buckets[i];
-    currentLength += bucket.offset - bucket.roffset;
-   }
-   assert(buffer instanceof ArrayBuffer || ArrayBuffer.isView(buffer));
-   var data = buffer.subarray(offset, offset + length);
-   if (length <= 0) {
-    return 0;
-   }
-   if (currentLength == 0) {
-    throw new FS.ErrnoError(ERRNO_CODES.EAGAIN);
-   }
-   var toRead = Math.min(currentLength, length);
-   var totalRead = toRead;
-   var toRemove = 0;
-   for (var i = 0; i < pipe.buckets.length; i++) {
-    var currBucket = pipe.buckets[i];
-    var bucketSize = currBucket.offset - currBucket.roffset;
-    if (toRead <= bucketSize) {
-     var tmpSlice = currBucket.buffer.subarray(currBucket.roffset, currBucket.offset);
-     if (toRead < bucketSize) {
-      tmpSlice = tmpSlice.subarray(0, toRead);
-      currBucket.roffset += toRead;
-     } else {
-      toRemove++;
-     }
-     data.set(tmpSlice);
-     break;
-    } else {
-     var tmpSlice = currBucket.buffer.subarray(currBucket.roffset, currBucket.offset);
-     data.set(tmpSlice);
-     data = data.subarray(tmpSlice.byteLength);
-     toRead -= tmpSlice.byteLength;
-     toRemove++;
-    }
-   }
-   if (toRemove && toRemove == pipe.buckets.length) {
-    toRemove--;
-    pipe.buckets[toRemove].offset = 0;
-    pipe.buckets[toRemove].roffset = 0;
-   }
-   pipe.buckets.splice(0, toRemove);
-   return totalRead;
-  }),
-  write: (function(stream, buffer, offset, length, position) {
-   var pipe = stream.node.pipe;
-   assert(buffer instanceof ArrayBuffer || ArrayBuffer.isView(buffer));
-   var data = buffer.subarray(offset, offset + length);
-   var dataLen = data.byteLength;
-   if (dataLen <= 0) {
-    return 0;
-   }
-   var currBucket = null;
-   if (pipe.buckets.length == 0) {
-    currBucket = {
-     buffer: new Uint8Array(PIPEFS.BUCKET_BUFFER_SIZE),
-     offset: 0,
-     roffset: 0
-    };
-    pipe.buckets.push(currBucket);
-   } else {
-    currBucket = pipe.buckets[pipe.buckets.length - 1];
-   }
-   assert(currBucket.offset <= PIPEFS.BUCKET_BUFFER_SIZE);
-   var freeBytesInCurrBuffer = PIPEFS.BUCKET_BUFFER_SIZE - currBucket.offset;
-   if (freeBytesInCurrBuffer >= dataLen) {
-    currBucket.buffer.set(data, currBucket.offset);
-    currBucket.offset += dataLen;
-    return dataLen;
-   } else if (freeBytesInCurrBuffer > 0) {
-    currBucket.buffer.set(data.subarray(0, freeBytesInCurrBuffer), currBucket.offset);
-    currBucket.offset += freeBytesInCurrBuffer;
-    data = data.subarray(freeBytesInCurrBuffer, data.byteLength);
-   }
-   var numBuckets = data.byteLength / PIPEFS.BUCKET_BUFFER_SIZE | 0;
-   var remElements = data.byteLength % PIPEFS.BUCKET_BUFFER_SIZE;
-   for (var i = 0; i < numBuckets; i++) {
-    var newBucket = {
-     buffer: new Uint8Array(PIPEFS.BUCKET_BUFFER_SIZE),
-     offset: PIPEFS.BUCKET_BUFFER_SIZE,
-     roffset: 0
-    };
-    pipe.buckets.push(newBucket);
-    newBucket.buffer.set(data.subarray(0, PIPEFS.BUCKET_BUFFER_SIZE));
-    data = data.subarray(PIPEFS.BUCKET_BUFFER_SIZE, data.byteLength);
-   }
-   if (remElements > 0) {
-    var newBucket = {
-     buffer: new Uint8Array(PIPEFS.BUCKET_BUFFER_SIZE),
-     offset: data.byteLength,
-     roffset: 0
-    };
-    pipe.buckets.push(newBucket);
-    newBucket.buffer.set(data);
-   }
-   return dataLen;
-  }),
-  close: (function(stream) {
-   var pipe = stream.node.pipe;
-   pipe.buckets = null;
-  })
- },
- nextname: (function() {
-  if (!PIPEFS.nextname.current) {
-   PIPEFS.nextname.current = 0;
-  }
-  return "pipe[" + PIPEFS.nextname.current++ + "]";
- })
-};
-function ___syscall42(which, varargs) {
- SYSCALLS.varargs = varargs;
- try {
-  var fdPtr = SYSCALLS.get();
-  if (fdPtr == 0) {
-   throw new FS.ErrnoError(ERRNO_CODES.EFAULT);
-  }
-  var res = PIPEFS.createPipe();
-  HEAP32[fdPtr >> 2] = res.readable_fd;
-  HEAP32[fdPtr + 4 >> 2] = res.writable_fd;
-  return 0;
- } catch (e) {
-  if (typeof FS === "undefined" || !(e instanceof FS.ErrnoError)) abort(e);
-  return -e.errno;
- }
-}
 function ___syscall5(which, varargs) {
  SYSCALLS.varargs = varargs;
  try {
@@ -8666,17 +8450,6 @@ function ___syscall6(which, varargs) {
   var stream = SYSCALLS.getStreamFromFD();
   FS.close(stream);
   return 0;
- } catch (e) {
-  if (typeof FS === "undefined" || !(e instanceof FS.ErrnoError)) abort(e);
-  return -e.errno;
- }
-}
-function ___syscall63(which, varargs) {
- SYSCALLS.varargs = varargs;
- try {
-  var old = SYSCALLS.getStreamFromFD(), suggestFD = SYSCALLS.get();
-  if (old.fd === suggestFD) return suggestFD;
-  return SYSCALLS.doDup(old.path, old.flags, suggestFD);
  } catch (e) {
   if (typeof FS === "undefined" || !(e instanceof FS.ErrnoError)) abort(e);
   return -e.errno;
@@ -11134,13 +10907,6 @@ function _emscripten_log(flags, varargs) {
  }
  _emscripten_log_js(flags, str);
 }
-function _longjmp(env, value) {
- Module["setThrew"](env, value || 1);
- throw "longjmp";
-}
-function _emscripten_longjmp(env, value) {
- _longjmp(env, value);
-}
 function _emscripten_num_logical_cores() {
  return 1;
 }
@@ -11615,137 +11381,6 @@ function _exit(status) {
 function _flock(fd, operation) {
  return 0;
 }
-function _getaddrinfo(node, service, hint, out) {
- var addr = 0;
- var port = 0;
- var flags = 0;
- var family = 0;
- var type = 0;
- var proto = 0;
- var ai;
- function allocaddrinfo(family, type, proto, canon, addr, port) {
-  var sa, salen, ai;
-  var res;
-  salen = family === 10 ? 28 : 16;
-  addr = family === 10 ? __inet_ntop6_raw(addr) : __inet_ntop4_raw(addr);
-  sa = _malloc(salen);
-  res = __write_sockaddr(sa, family, addr, port);
-  assert(!res.errno);
-  ai = _malloc(32);
-  HEAP32[ai + 4 >> 2] = family;
-  HEAP32[ai + 8 >> 2] = type;
-  HEAP32[ai + 12 >> 2] = proto;
-  HEAP32[ai + 24 >> 2] = canon;
-  HEAP32[ai + 20 >> 2] = sa;
-  if (family === 10) {
-   HEAP32[ai + 16 >> 2] = 28;
-  } else {
-   HEAP32[ai + 16 >> 2] = 16;
-  }
-  HEAP32[ai + 28 >> 2] = 0;
-  return ai;
- }
- if (hint) {
-  flags = HEAP32[hint >> 2];
-  family = HEAP32[hint + 4 >> 2];
-  type = HEAP32[hint + 8 >> 2];
-  proto = HEAP32[hint + 12 >> 2];
- }
- if (type && !proto) {
-  proto = type === 2 ? 17 : 6;
- }
- if (!type && proto) {
-  type = proto === 17 ? 2 : 1;
- }
- if (proto === 0) {
-  proto = 6;
- }
- if (type === 0) {
-  type = 1;
- }
- if (!node && !service) {
-  return -2;
- }
- if (flags & ~(1 | 2 | 4 | 1024 | 8 | 16 | 32)) {
-  return -1;
- }
- if (hint !== 0 && HEAP32[hint >> 2] & 2 && !node) {
-  return -1;
- }
- if (flags & 32) {
-  return -2;
- }
- if (type !== 0 && type !== 1 && type !== 2) {
-  return -7;
- }
- if (family !== 0 && family !== 2 && family !== 10) {
-  return -6;
- }
- if (service) {
-  service = Pointer_stringify(service);
-  port = parseInt(service, 10);
-  if (isNaN(port)) {
-   if (flags & 1024) {
-    return -2;
-   }
-   return -8;
-  }
- }
- if (!node) {
-  if (family === 0) {
-   family = 2;
-  }
-  if ((flags & 1) === 0) {
-   if (family === 2) {
-    addr = _htonl(2130706433);
-   } else {
-    addr = [ 0, 0, 0, 1 ];
-   }
-  }
-  ai = allocaddrinfo(family, type, proto, null, addr, port);
-  HEAP32[out >> 2] = ai;
-  return 0;
- }
- node = Pointer_stringify(node);
- addr = __inet_pton4_raw(node);
- if (addr !== null) {
-  if (family === 0 || family === 2) {
-   family = 2;
-  } else if (family === 10 && flags & 8) {
-   addr = [ 0, 0, _htonl(65535), addr ];
-   family = 10;
-  } else {
-   return -2;
-  }
- } else {
-  addr = __inet_pton6_raw(node);
-  if (addr !== null) {
-   if (family === 0 || family === 10) {
-    family = 10;
-   } else {
-    return -2;
-   }
-  }
- }
- if (addr != null) {
-  ai = allocaddrinfo(family, type, proto, node, addr, port);
-  HEAP32[out >> 2] = ai;
-  return 0;
- }
- if (flags & 4) {
-  return -2;
- }
- node = DNS.lookup_name(node);
- addr = __inet_pton4_raw(node);
- if (family === 0) {
-  family = 2;
- } else if (family === 10) {
-  addr = [ 0, 0, _htonl(65535), addr ];
- }
- ai = allocaddrinfo(family, type, proto, null, addr, port);
- HEAP32[out >> 2] = ai;
- return 0;
-}
 function _getenv(name) {
  if (name === 0) return 0;
  name = Pointer_stringify(name);
@@ -11786,40 +11421,6 @@ function _gethostbyaddr(addr, addrlen, type) {
  }
  var hostp = allocate(intArrayFromString(host), "i8", ALLOC_STACK);
  return _gethostbyname(hostp);
-}
-function _getnameinfo(sa, salen, node, nodelen, serv, servlen, flags) {
- var info = __read_sockaddr(sa, salen);
- if (info.errno) {
-  return -6;
- }
- var port = info.port;
- var addr = info.addr;
- var overflowed = false;
- if (node && nodelen) {
-  var lookup;
-  if (flags & 1 || !(lookup = DNS.lookup_addr(addr))) {
-   if (flags & 8) {
-    return -2;
-   }
-  } else {
-   addr = lookup;
-  }
-  var numBytesWrittenExclNull = stringToUTF8(addr, node, nodelen);
-  if (numBytesWrittenExclNull + 1 >= nodelen) {
-   overflowed = true;
-  }
- }
- if (serv && servlen) {
-  port = "" + port;
-  var numBytesWrittenExclNull = stringToUTF8(port, serv, servlen);
-  if (numBytesWrittenExclNull + 1 >= servlen) {
-   overflowed = true;
-  }
- }
- if (overflowed) {
-  return -12;
- }
- return 0;
 }
 function _getpagesize() {
  return PAGE_SIZE;
@@ -13668,6 +13269,10 @@ function _localtime_r(time, tmPtr) {
 function _localtime(time) {
  return _localtime_r(time, ___tm_current);
 }
+function _longjmp(env, value) {
+ Module["setThrew"](env, value || 1);
+ throw "longjmp";
+}
 function _emscripten_memcpy_big(dest, src, num) {
  HEAPU8.set(HEAPU8.subarray(src, src + num), dest);
  return dest;
@@ -14286,9 +13891,6 @@ if (ENVIRONMENT_IS_NODE) {
 __ATINIT__.push((function() {
  SOCKFS.root = FS.mount(SOCKFS, {}, null);
 }));
-__ATINIT__.push((function() {
- PIPEFS.root = FS.mount(PIPEFS, {}, null);
-}));
 if (ENVIRONMENT_IS_NODE) {
  _emscripten_get_now = function _emscripten_get_now_actual() {
   var t = process["hrtime"]();
@@ -14425,11 +14027,6 @@ function nullFunc_diiii(x) {
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
-function nullFunc_diji(x) {
- err("Invalid function pointer called with signature 'diji'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
 function nullFunc_dji(x) {
  err("Invalid function pointer called with signature 'dji'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
@@ -14477,11 +14074,6 @@ function nullFunc_ffi(x) {
 }
 function nullFunc_fi(x) {
  err("Invalid function pointer called with signature 'fi'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_fidi(x) {
- err("Invalid function pointer called with signature 'fidi'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
@@ -14935,11 +14527,6 @@ function nullFunc_iiiiiiiiiiiiii(x) {
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
-function nullFunc_iiiiij(x) {
- err("Invalid function pointer called with signature 'iiiiij'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
 function nullFunc_iiiiiji(x) {
  err("Invalid function pointer called with signature 'iiiiiji'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
@@ -14957,21 +14544,6 @@ function nullFunc_iiiiji(x) {
 }
 function nullFunc_iiiijii(x) {
  err("Invalid function pointer called with signature 'iiiijii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_iiiijiii(x) {
- err("Invalid function pointer called with signature 'iiiijiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_iiiijjii(x) {
- err("Invalid function pointer called with signature 'iiiijjii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_iiiijjiiii(x) {
- err("Invalid function pointer called with signature 'iiiijjiiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
@@ -14997,11 +14569,6 @@ function nullFunc_iiijiii(x) {
 }
 function nullFunc_iiijji(x) {
  err("Invalid function pointer called with signature 'iiijji'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_iiijjii(x) {
- err("Invalid function pointer called with signature 'iiijjii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
@@ -15170,16 +14737,6 @@ function nullFunc_jji(x) {
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
-function nullFunc_jjii(x) {
- err("Invalid function pointer called with signature 'jjii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_jjjji(x) {
- err("Invalid function pointer called with signature 'jjjji'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
 function nullFunc_v(x) {
  err("Invalid function pointer called with signature 'v'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
@@ -15227,11 +14784,6 @@ function nullFunc_vi(x) {
 }
 function nullFunc_vid(x) {
  err("Invalid function pointer called with signature 'vid'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
-function nullFunc_vidd(x) {
- err("Invalid function pointer called with signature 'vidd'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
@@ -15920,11 +15472,6 @@ function nullFunc_vijjii(x) {
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
-function nullFunc_vijjji(x) {
- err("Invalid function pointer called with signature 'vijjji'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
- err("Build with ASSERTIONS=2 for more info.");
- abort(x);
-}
 function nullFunc_vjiiii(x) {
  err("Invalid function pointer called with signature 'vjiiii'. Perhaps this is an invalid value (e.g. caused by calling a virtual method on a NULL pointer)? Or calling a function with an incorrect type, which will fail? (it is worth building your source files with -Werror (warnings are errors), as warnings can indicate undefined behavior which can cause this)");
  err("Build with ASSERTIONS=2 for more info.");
@@ -15935,8 +15482,8 @@ function nullFunc_vjji(x) {
  err("Build with ASSERTIONS=2 for more info.");
  abort(x);
 }
-Module["wasmTableSize"] = 83672;
-Module["wasmMaxTableSize"] = 83672;
+Module["wasmTableSize"] = 57405;
+Module["wasmMaxTableSize"] = 57405;
 function invoke_dd(index, a1) {
  var sp = stackSave();
  try {
@@ -16087,16 +15634,6 @@ function invoke_diiii(index, a1, a2, a3, a4) {
   Module["setThrew"](1, 0);
  }
 }
-function invoke_diji(index, a1, a2, a3, a4) {
- var sp = stackSave();
- try {
-  return Module["dynCall_diji"](index, a1, a2, a3, a4);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
 function invoke_dji(index, a1, a2, a3) {
  var sp = stackSave();
  try {
@@ -16191,16 +15728,6 @@ function invoke_fi(index, a1) {
  var sp = stackSave();
  try {
   return Module["dynCall_fi"](index, a1);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_fidi(index, a1, a2, a3) {
- var sp = stackSave();
- try {
-  return Module["dynCall_fidi"](index, a1, a2, a3);
  } catch (e) {
   stackRestore(sp);
   if (typeof e !== "number" && e !== "longjmp") throw e;
@@ -17107,16 +16634,6 @@ function invoke_iiiiiiiiiiiiii(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a
   Module["setThrew"](1, 0);
  }
 }
-function invoke_iiiiij(index, a1, a2, a3, a4, a5, a6) {
- var sp = stackSave();
- try {
-  return Module["dynCall_iiiiij"](index, a1, a2, a3, a4, a5, a6);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
 function invoke_iiiiiji(index, a1, a2, a3, a4, a5, a6, a7) {
  var sp = stackSave();
  try {
@@ -17151,36 +16668,6 @@ function invoke_iiiijii(index, a1, a2, a3, a4, a5, a6, a7) {
  var sp = stackSave();
  try {
   return Module["dynCall_iiiijii"](index, a1, a2, a3, a4, a5, a6, a7);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_iiiijiii(index, a1, a2, a3, a4, a5, a6, a7, a8) {
- var sp = stackSave();
- try {
-  return Module["dynCall_iiiijiii"](index, a1, a2, a3, a4, a5, a6, a7, a8);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_iiiijjii(index, a1, a2, a3, a4, a5, a6, a7, a8, a9) {
- var sp = stackSave();
- try {
-  return Module["dynCall_iiiijjii"](index, a1, a2, a3, a4, a5, a6, a7, a8, a9);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_iiiijjiiii(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) {
- var sp = stackSave();
- try {
-  return Module["dynCall_iiiijjiiii"](index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11);
  } catch (e) {
   stackRestore(sp);
   if (typeof e !== "number" && e !== "longjmp") throw e;
@@ -17231,16 +16718,6 @@ function invoke_iiijji(index, a1, a2, a3, a4, a5, a6, a7) {
  var sp = stackSave();
  try {
   return Module["dynCall_iiijji"](index, a1, a2, a3, a4, a5, a6, a7);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_iiijjii(index, a1, a2, a3, a4, a5, a6, a7, a8) {
- var sp = stackSave();
- try {
-  return Module["dynCall_iiijjii"](index, a1, a2, a3, a4, a5, a6, a7, a8);
  } catch (e) {
   stackRestore(sp);
   if (typeof e !== "number" && e !== "longjmp") throw e;
@@ -17577,26 +17054,6 @@ function invoke_jji(index, a1, a2, a3) {
   Module["setThrew"](1, 0);
  }
 }
-function invoke_jjii(index, a1, a2, a3, a4) {
- var sp = stackSave();
- try {
-  return Module["dynCall_jjii"](index, a1, a2, a3, a4);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_jjjji(index, a1, a2, a3, a4, a5, a6, a7) {
- var sp = stackSave();
- try {
-  return Module["dynCall_jjjji"](index, a1, a2, a3, a4, a5, a6, a7);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
 function invoke_v(index) {
  var sp = stackSave();
  try {
@@ -17691,16 +17148,6 @@ function invoke_vid(index, a1, a2) {
  var sp = stackSave();
  try {
   Module["dynCall_vid"](index, a1, a2);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
-function invoke_vidd(index, a1, a2, a3) {
- var sp = stackSave();
- try {
-  Module["dynCall_vidd"](index, a1, a2, a3);
  } catch (e) {
   stackRestore(sp);
   if (typeof e !== "number" && e !== "longjmp") throw e;
@@ -19077,16 +18524,6 @@ function invoke_vijjii(index, a1, a2, a3, a4, a5, a6, a7) {
   Module["setThrew"](1, 0);
  }
 }
-function invoke_vijjji(index, a1, a2, a3, a4, a5, a6, a7, a8) {
- var sp = stackSave();
- try {
-  Module["dynCall_vijjji"](index, a1, a2, a3, a4, a5, a6, a7, a8);
- } catch (e) {
-  stackRestore(sp);
-  if (typeof e !== "number" && e !== "longjmp") throw e;
-  Module["setThrew"](1, 0);
- }
-}
 function invoke_vjiiii(index, a1, a2, a3, a4, a5, a6) {
  var sp = stackSave();
  try {
@@ -19130,7 +18567,6 @@ Module.asmLibraryArg = {
  "nullFunc_dii": nullFunc_dii,
  "nullFunc_diii": nullFunc_diii,
  "nullFunc_diiii": nullFunc_diiii,
- "nullFunc_diji": nullFunc_diji,
  "nullFunc_dji": nullFunc_dji,
  "nullFunc_f": nullFunc_f,
  "nullFunc_fdi": nullFunc_fdi,
@@ -19141,7 +18577,6 @@ Module.asmLibraryArg = {
  "nullFunc_fffifffi": nullFunc_fffifffi,
  "nullFunc_ffi": nullFunc_ffi,
  "nullFunc_fi": nullFunc_fi,
- "nullFunc_fidi": nullFunc_fidi,
  "nullFunc_fif": nullFunc_fif,
  "nullFunc_fiff": nullFunc_fiff,
  "nullFunc_fiffi": nullFunc_fiffi,
@@ -19232,20 +18667,15 @@ Module.asmLibraryArg = {
  "nullFunc_iiiiiiiiiiii": nullFunc_iiiiiiiiiiii,
  "nullFunc_iiiiiiiiiiiii": nullFunc_iiiiiiiiiiiii,
  "nullFunc_iiiiiiiiiiiiii": nullFunc_iiiiiiiiiiiiii,
- "nullFunc_iiiiij": nullFunc_iiiiij,
  "nullFunc_iiiiiji": nullFunc_iiiiiji,
  "nullFunc_iiiij": nullFunc_iiiij,
  "nullFunc_iiiiji": nullFunc_iiiiji,
  "nullFunc_iiiijii": nullFunc_iiiijii,
- "nullFunc_iiiijiii": nullFunc_iiiijiii,
- "nullFunc_iiiijjii": nullFunc_iiiijjii,
- "nullFunc_iiiijjiiii": nullFunc_iiiijjiiii,
  "nullFunc_iiij": nullFunc_iiij,
  "nullFunc_iiiji": nullFunc_iiiji,
  "nullFunc_iiijii": nullFunc_iiijii,
  "nullFunc_iiijiii": nullFunc_iiijiii,
  "nullFunc_iiijji": nullFunc_iiijji,
- "nullFunc_iiijjii": nullFunc_iiijjii,
  "nullFunc_iij": nullFunc_iij,
  "nullFunc_iiji": nullFunc_iiji,
  "nullFunc_iijii": nullFunc_iijii,
@@ -19279,8 +18709,6 @@ Module.asmLibraryArg = {
  "nullFunc_jijj": nullFunc_jijj,
  "nullFunc_jijji": nullFunc_jijji,
  "nullFunc_jji": nullFunc_jji,
- "nullFunc_jjii": nullFunc_jjii,
- "nullFunc_jjjji": nullFunc_jjjji,
  "nullFunc_v": nullFunc_v,
  "nullFunc_vd": nullFunc_vd,
  "nullFunc_vf": nullFunc_vf,
@@ -19291,7 +18719,6 @@ Module.asmLibraryArg = {
  "nullFunc_vfiii": nullFunc_vfiii,
  "nullFunc_vi": nullFunc_vi,
  "nullFunc_vid": nullFunc_vid,
- "nullFunc_vidd": nullFunc_vidd,
  "nullFunc_vidddddiiiidi": nullFunc_vidddddiiiidi,
  "nullFunc_viddddi": nullFunc_viddddi,
  "nullFunc_vidddi": nullFunc_vidddi,
@@ -19429,7 +18856,6 @@ Module.asmLibraryArg = {
  "nullFunc_vijijji": nullFunc_vijijji,
  "nullFunc_vijji": nullFunc_vijji,
  "nullFunc_vijjii": nullFunc_vijjii,
- "nullFunc_vijjji": nullFunc_vijjji,
  "nullFunc_vjiiii": nullFunc_vjiiii,
  "nullFunc_vjji": nullFunc_vjji,
  "invoke_dd": invoke_dd,
@@ -19447,7 +18873,6 @@ Module.asmLibraryArg = {
  "invoke_dii": invoke_dii,
  "invoke_diii": invoke_diii,
  "invoke_diiii": invoke_diiii,
- "invoke_diji": invoke_diji,
  "invoke_dji": invoke_dji,
  "invoke_f": invoke_f,
  "invoke_fdi": invoke_fdi,
@@ -19458,7 +18883,6 @@ Module.asmLibraryArg = {
  "invoke_fffifffi": invoke_fffifffi,
  "invoke_ffi": invoke_ffi,
  "invoke_fi": invoke_fi,
- "invoke_fidi": invoke_fidi,
  "invoke_fif": invoke_fif,
  "invoke_fiff": invoke_fiff,
  "invoke_fiffi": invoke_fiffi,
@@ -19549,20 +18973,15 @@ Module.asmLibraryArg = {
  "invoke_iiiiiiiiiiii": invoke_iiiiiiiiiiii,
  "invoke_iiiiiiiiiiiii": invoke_iiiiiiiiiiiii,
  "invoke_iiiiiiiiiiiiii": invoke_iiiiiiiiiiiiii,
- "invoke_iiiiij": invoke_iiiiij,
  "invoke_iiiiiji": invoke_iiiiiji,
  "invoke_iiiij": invoke_iiiij,
  "invoke_iiiiji": invoke_iiiiji,
  "invoke_iiiijii": invoke_iiiijii,
- "invoke_iiiijiii": invoke_iiiijiii,
- "invoke_iiiijjii": invoke_iiiijjii,
- "invoke_iiiijjiiii": invoke_iiiijjiiii,
  "invoke_iiij": invoke_iiij,
  "invoke_iiiji": invoke_iiiji,
  "invoke_iiijii": invoke_iiijii,
  "invoke_iiijiii": invoke_iiijiii,
  "invoke_iiijji": invoke_iiijji,
- "invoke_iiijjii": invoke_iiijjii,
  "invoke_iij": invoke_iij,
  "invoke_iiji": invoke_iiji,
  "invoke_iijii": invoke_iijii,
@@ -19596,8 +19015,6 @@ Module.asmLibraryArg = {
  "invoke_jijj": invoke_jijj,
  "invoke_jijji": invoke_jijji,
  "invoke_jji": invoke_jji,
- "invoke_jjii": invoke_jjii,
- "invoke_jjjji": invoke_jjjji,
  "invoke_v": invoke_v,
  "invoke_vd": invoke_vd,
  "invoke_vf": invoke_vf,
@@ -19608,7 +19025,6 @@ Module.asmLibraryArg = {
  "invoke_vfiii": invoke_vfiii,
  "invoke_vi": invoke_vi,
  "invoke_vid": invoke_vid,
- "invoke_vidd": invoke_vidd,
  "invoke_vidddddiiiidi": invoke_vidddddiiiidi,
  "invoke_viddddi": invoke_viddddi,
  "invoke_vidddi": invoke_vidddi,
@@ -19746,7 +19162,6 @@ Module.asmLibraryArg = {
  "invoke_vijijji": invoke_vijijji,
  "invoke_vijji": invoke_vijji,
  "invoke_vijjii": invoke_vijjii,
- "invoke_vijjji": invoke_vijjji,
  "invoke_vjiiii": invoke_vjiiii,
  "invoke_vjji": invoke_vjji,
  "_JS_Cursor_SetImage": _JS_Cursor_SetImage,
@@ -19806,7 +19221,6 @@ Module.asmLibraryArg = {
  "___syscall145": ___syscall145,
  "___syscall146": ___syscall146,
  "___syscall15": ___syscall15,
- "___syscall168": ___syscall168,
  "___syscall183": ___syscall183,
  "___syscall192": ___syscall192,
  "___syscall193": ___syscall193,
@@ -19824,11 +19238,9 @@ Module.asmLibraryArg = {
  "___syscall39": ___syscall39,
  "___syscall4": ___syscall4,
  "___syscall40": ___syscall40,
- "___syscall42": ___syscall42,
  "___syscall5": ___syscall5,
  "___syscall54": ___syscall54,
  "___syscall6": ___syscall6,
- "___syscall63": ___syscall63,
  "___syscall77": ___syscall77,
  "___syscall85": ___syscall85,
  "___syscall91": ___syscall91,
@@ -19881,7 +19293,6 @@ Module.asmLibraryArg = {
  "_emscripten_is_webgl_context_lost": _emscripten_is_webgl_context_lost,
  "_emscripten_log": _emscripten_log,
  "_emscripten_log_js": _emscripten_log_js,
- "_emscripten_longjmp": _emscripten_longjmp,
  "_emscripten_memcpy_big": _emscripten_memcpy_big,
  "_emscripten_num_logical_cores": _emscripten_num_logical_cores,
  "_emscripten_request_fullscreen": _emscripten_request_fullscreen,
@@ -19922,11 +19333,9 @@ Module.asmLibraryArg = {
  "_emscripten_webgl_make_context_current": _emscripten_webgl_make_context_current,
  "_exit": _exit,
  "_flock": _flock,
- "_getaddrinfo": _getaddrinfo,
  "_getenv": _getenv,
  "_gethostbyaddr": _gethostbyaddr,
  "_gethostbyname": _gethostbyname,
- "_getnameinfo": _getnameinfo,
  "_getpagesize": _getpagesize,
  "_getpwuid": _getpwuid,
  "_gettimeofday": _gettimeofday,
@@ -26061,11 +25470,6 @@ var dynCall_diiii = Module["dynCall_diiii"] = (function() {
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_diiii"].apply(null, arguments);
 });
-var dynCall_diji = Module["dynCall_diji"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_diji"].apply(null, arguments);
-});
 var dynCall_dji = Module["dynCall_dji"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
@@ -26115,11 +25519,6 @@ var dynCall_fi = Module["dynCall_fi"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_fi"].apply(null, arguments);
-});
-var dynCall_fidi = Module["dynCall_fidi"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_fidi"].apply(null, arguments);
 });
 var dynCall_fif = Module["dynCall_fif"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
@@ -26571,11 +25970,6 @@ var dynCall_iiiiiiiiiiiiii = Module["dynCall_iiiiiiiiiiiiii"] = (function() {
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_iiiiiiiiiiiiii"].apply(null, arguments);
 });
-var dynCall_iiiiij = Module["dynCall_iiiiij"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_iiiiij"].apply(null, arguments);
-});
 var dynCall_iiiiiji = Module["dynCall_iiiiiji"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
@@ -26595,21 +25989,6 @@ var dynCall_iiiijii = Module["dynCall_iiiijii"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_iiiijii"].apply(null, arguments);
-});
-var dynCall_iiiijiii = Module["dynCall_iiiijiii"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_iiiijiii"].apply(null, arguments);
-});
-var dynCall_iiiijjii = Module["dynCall_iiiijjii"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_iiiijjii"].apply(null, arguments);
-});
-var dynCall_iiiijjiiii = Module["dynCall_iiiijjiiii"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_iiiijjiiii"].apply(null, arguments);
 });
 var dynCall_iiij = Module["dynCall_iiij"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
@@ -26635,11 +26014,6 @@ var dynCall_iiijji = Module["dynCall_iiijji"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_iiijji"].apply(null, arguments);
-});
-var dynCall_iiijjii = Module["dynCall_iiijjii"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_iiijjii"].apply(null, arguments);
 });
 var dynCall_iij = Module["dynCall_iij"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
@@ -26806,16 +26180,6 @@ var dynCall_jji = Module["dynCall_jji"] = (function() {
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_jji"].apply(null, arguments);
 });
-var dynCall_jjii = Module["dynCall_jjii"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_jjii"].apply(null, arguments);
-});
-var dynCall_jjjji = Module["dynCall_jjjji"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_jjjji"].apply(null, arguments);
-});
 var dynCall_v = Module["dynCall_v"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
@@ -26865,11 +26229,6 @@ var dynCall_vid = Module["dynCall_vid"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_vid"].apply(null, arguments);
-});
-var dynCall_vidd = Module["dynCall_vidd"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_vidd"].apply(null, arguments);
 });
 var dynCall_vidddddiiiidi = Module["dynCall_vidddddiiiidi"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
@@ -27555,11 +26914,6 @@ var dynCall_vijjii = Module["dynCall_vijjii"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
  assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
  return Module["asm"]["dynCall_vijjii"].apply(null, arguments);
-});
-var dynCall_vijjji = Module["dynCall_vijjji"] = (function() {
- assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
- assert(!runtimeExited, "the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)");
- return Module["asm"]["dynCall_vijjji"].apply(null, arguments);
 });
 var dynCall_vjiiii = Module["dynCall_vjiiii"] = (function() {
  assert(runtimeInitialized, "you need to wait for the runtime to be ready (e.g. wait for main() to be called)");
