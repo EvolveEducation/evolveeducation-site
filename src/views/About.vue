@@ -71,7 +71,7 @@
         <div class="aboutCard col-md-3">
           <div class="aboutCardPadding">
             <img src="images/brian.jpg" />
-            <p>Brian is a CS major at Virginia Tech. For this project he was 
+            <p class="description">Brian is a CS major at Virginia Tech. For this project he was 
               responsible for some of the UI elements and the website.</p>
             <div class="row social-row">
               <div class="col">
@@ -87,7 +87,7 @@
         <div class="aboutCard col-md-3">
           <div class="aboutCardPadding">
             <img src="images/nicole.jpg" />
-            <p>Nicole is a recent graduate of Virginia Tech who majored in Biology. 
+            <p class="description">Nicole is a recent graduate of Virginia Tech who majored in Biology. 
               She currently is pursing a career at CGI. For this project she was 
               responsible for gathering and documenting research on eColi and bacteria
               growth patterns.</p>
