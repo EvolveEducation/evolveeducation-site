@@ -1,6 +1,6 @@
-# bacterialgrowth
+# Evolve Education - Webapp
 
-## Project setup
+### Project setup
 ```
 npm install
 ```
